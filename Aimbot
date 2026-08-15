@@ -1,8 +1,9 @@
 --// MOBILE HEAD AIMBOT
---// JUGADORES + NPCs
+--// Players + NPCs
 --// TARGET + GUN AIMBOT
---// LINE OF SIGHT + AUTO DISABLE ON DEATH
---// Roblox Studio - LocalScript
+--// LINE OF SIGHT
+--// PERSISTENT MODES AFTER PLAYER DEATH
+--// LocalScript - Roblox Studio
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -12,19 +13,15 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 --==================================================
--- CONFIGURACIÓN
+-- CONFIG
 --==================================================
 
 local MAX_TARGET_DISTANCE = 500
-
--- Fuerza del apuntado
 local AIM_STRENGTH = 0.85
-
--- Influencia de la dirección de mirada
 local LOOK_WEIGHT = 0.15
 
 --==================================================
--- ESTADO
+-- STATE
 --==================================================
 
 local AIM_ENABLED = false
@@ -59,10 +56,6 @@ local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0,12)
 Corner.Parent = Frame
 
---==================================================
--- TÍTULO
---==================================================
-
 local Title = Instance.new("TextButton")
 Title.Size = UDim2.new(1,0,0,32)
 Title.BackgroundTransparency = 1
@@ -72,7 +65,7 @@ Title.TextScaled = true
 Title.Parent = Frame
 
 --==================================================
--- TARGET
+-- TARGET BUTTON
 --==================================================
 
 local TargetButton = Instance.new("TextButton")
@@ -90,7 +83,7 @@ TargetCorner.CornerRadius = UDim.new(0,10)
 TargetCorner.Parent = TargetButton
 
 --==================================================
--- AIM
+-- AIM BUTTON
 --==================================================
 
 local AimButton = Instance.new("TextButton")
@@ -108,7 +101,7 @@ AimCorner.CornerRadius = UDim.new(0,10)
 AimCorner.Parent = AimButton
 
 --==================================================
--- GUN AIMBOT
+-- GUN AIMBOT BUTTON
 --==================================================
 
 local GunButton = Instance.new("TextButton")
@@ -126,7 +119,7 @@ GunCorner.CornerRadius = UDim.new(0,10)
 GunCorner.Parent = GunButton
 
 --==================================================
--- ARRASTRAR GUI
+-- DRAG GUI
 --==================================================
 
 local dragging = false
@@ -141,6 +134,7 @@ Title.InputBegan:Connect(function(input)
 		dragging = true
 		dragStart = input.Position
 		startPosition = Frame.Position
+
 	end
 end)
 
@@ -150,6 +144,7 @@ Title.InputEnded:Connect(function(input)
 		or input.UserInputType == Enum.UserInputType.MouseButton1 then
 
 		dragging = false
+
 	end
 end)
 
@@ -171,11 +166,12 @@ UserInputService.InputChanged:Connect(function(input)
 			startPosition.Y.Scale,
 			startPosition.Y.Offset + delta.Y
 		)
+
 	end
 end)
 
 --==================================================
--- OBTENER HUMANOID + HEAD
+-- TARGET INFO
 --==================================================
 
 local function GetTargetInfo(model)
@@ -199,16 +195,17 @@ local function GetTargetInfo(model)
 end
 
 --==================================================
--- PERSONAJE DE JUGADOR
+-- PLAYER CHARACTER CHECK
 --==================================================
 
 local function IsPlayerCharacter(model)
 
 	return Players:GetPlayerFromCharacter(model) ~= nil
+
 end
 
 --==================================================
--- LÍNEA DE VISIÓN
+-- LINE OF SIGHT
 --==================================================
 
 local function HasLineOfSight(targetModel, head)
@@ -220,14 +217,9 @@ local function HasLineOfSight(targetModel, head)
 	end
 
 	local origin = Camera.CFrame.Position
+	local direction = head.Position - origin
 
-	local direction =
-		head.Position - origin
-
-	local distance =
-		direction.Magnitude
-
-	if distance <= 0 then
+	if direction.Magnitude <= 0 then
 		return false
 	end
 
@@ -235,54 +227,41 @@ local function HasLineOfSight(targetModel, head)
 
 	params.FilterType = Enum.RaycastFilterType.Exclude
 
-	params.FilterDescendantsInstances = {
-		Character
-	}
+	local filter = {}
 
+	if Character then
+		table.insert(filter, Character)
+	end
+
+	params.FilterDescendantsInstances = filter
 	params.IgnoreWater = true
 
-	local result =
-		workspace:Raycast(
-			origin,
-			direction,
-			params
-		)
-
-	--------------------------------------------------
-	-- NADA BLOQUEA EL CAMINO
-	--------------------------------------------------
+	local result = workspace:Raycast(
+		origin,
+		direction,
+		params
+	)
 
 	if not result then
 		return true
 	end
 
-	--------------------------------------------------
-	-- EL RAYCAST TOCÓ AL PROPIO OBJETIVO
-	--------------------------------------------------
-
 	if result.Instance:IsDescendantOf(targetModel) then
 		return true
 	end
-
-	--------------------------------------------------
-	-- HAY UNA PARED/OBJETO ENTRE MEDIO
-	--------------------------------------------------
 
 	return false
 end
 
 --==================================================
--- CANDIDATOS
+-- GET CANDIDATES
 --==================================================
 
 local function GetCandidates()
 
 	local candidates = {}
 
-	--------------------------------------------------
-	-- JUGADORES
-	--------------------------------------------------
-
+	-- Players
 	for _, player in ipairs(Players:GetPlayers()) do
 
 		if player ~= LocalPlayer then
@@ -295,18 +274,14 @@ local function GetCandidates()
 					GetTargetInfo(character)
 
 				if humanoid and head then
-
 					table.insert(candidates, character)
-
 				end
+
 			end
 		end
 	end
 
-	--------------------------------------------------
 	-- NPCs
-	--------------------------------------------------
-
 	for _, object in ipairs(workspace:GetDescendants()) do
 
 		if object:IsA("Model")
@@ -316,10 +291,9 @@ local function GetCandidates()
 				GetTargetInfo(object)
 
 			if humanoid and head then
-
 				table.insert(candidates, object)
-
 			end
+
 		end
 	end
 
@@ -327,7 +301,7 @@ local function GetCandidates()
 end
 
 --==================================================
--- BUSCAR OBJETIVO
+-- FIND BEST TARGET
 --==================================================
 
 local function FindBestTarget()
@@ -338,14 +312,10 @@ local function FindBestTarget()
 		return nil
 	end
 
-	local cameraPosition =
-		Camera.CFrame.Position
+	local cameraPosition = Camera.CFrame.Position
+	local lookVector = Camera.CFrame.LookVector
 
-	local lookVector =
-		Camera.CFrame.LookVector
-
-	local candidates =
-		GetCandidates()
+	local candidates = GetCandidates()
 
 	local bestTarget = nil
 	local bestScore = math.huge
@@ -365,10 +335,7 @@ local function FindBestTarget()
 
 			if distance <= MAX_TARGET_DISTANCE then
 
-				--------------------------------------------------
-				-- VISIBILIDAD
-				--------------------------------------------------
-
+				-- Wall check
 				if HasLineOfSight(model, head) then
 
 					local direction =
@@ -383,13 +350,10 @@ local function FindBestTarget()
 							)
 						)
 
-					--------------------------------------------------
-					-- DISTANCIA PRINCIPAL
-					--------------------------------------------------
-
 					local score =
 						distance
-						- (
+						-
+						(
 							alignment
 							* LOOK_WEIGHT
 							* distance
@@ -410,7 +374,7 @@ local function FindBestTarget()
 end
 
 --==================================================
--- ESTABLECER TARGET
+-- SET TARGET
 --==================================================
 
 local function SetTarget(model)
@@ -437,7 +401,7 @@ local function SetTarget(model)
 end
 
 --==================================================
--- LIMPIAR TARGET
+-- CLEAR TARGET
 --==================================================
 
 local function ClearTarget()
@@ -448,7 +412,7 @@ local function ClearTarget()
 end
 
 --==================================================
--- BOTÓN TARGET
+-- UPDATE TARGET BUTTON
 --==================================================
 
 local function UpdateTargetButton()
@@ -456,14 +420,12 @@ local function UpdateTargetButton()
 	if TARGET_LOCKED then
 
 		TargetButton.Text = "LOCK"
-
 		TargetButton.BackgroundColor3 =
 			Color3.fromRGB(190,60,60)
 
 	else
 
 		TargetButton.Text = "TARGET"
-
 		TargetButton.BackgroundColor3 =
 			Color3.fromRGB(55,55,55)
 
@@ -471,7 +433,7 @@ local function UpdateTargetButton()
 end
 
 --==================================================
--- CONSEGUIR OBJETIVO
+-- ACQUIRE TARGET
 --==================================================
 
 local function AcquireNearestTarget()
@@ -482,9 +444,7 @@ local function AcquireNearestTarget()
 	if newTarget then
 
 		if SetTarget(newTarget) then
-
 			return true
-
 		end
 	end
 
@@ -502,9 +462,7 @@ TargetButton.Activated:Connect(function()
 	if TARGET_LOCKED then
 
 		TARGET_LOCKED = false
-
 		ClearTarget()
-
 		UpdateTargetButton()
 
 		return
@@ -513,7 +471,6 @@ TargetButton.Activated:Connect(function()
 	if AcquireNearestTarget() then
 
 		TARGET_LOCKED = true
-
 		UpdateTargetButton()
 
 	else
@@ -541,14 +498,12 @@ AimButton.Activated:Connect(function()
 	if AIM_ENABLED then
 
 		AimButton.Text = "AIM ON"
-
 		AimButton.BackgroundColor3 =
 			Color3.fromRGB(45,180,75)
 
 	else
 
 		AimButton.Text = "AIM"
-
 		AimButton.BackgroundColor3 =
 			Color3.fromRGB(55,55,55)
 
@@ -556,7 +511,7 @@ AimButton.Activated:Connect(function()
 end)
 
 --==================================================
--- GUN AIMBOT
+-- GUN AIMBOT BUTTON
 --==================================================
 
 GunButton.Activated:Connect(function()
@@ -566,9 +521,7 @@ GunButton.Activated:Connect(function()
 
 	if GUN_AIM_ENABLED then
 
-		GunButton.Text =
-			"GUN AIM ON"
-
+		GunButton.Text = "GUN AIM ON"
 		GunButton.BackgroundColor3 =
 			Color3.fromRGB(180,55,55)
 
@@ -578,9 +531,7 @@ GunButton.Activated:Connect(function()
 
 	else
 
-		GunButton.Text =
-			"GUN AIMBOT"
-
+		GunButton.Text = "GUN AIMBOT"
 		GunButton.BackgroundColor3 =
 			Color3.fromRGB(55,55,55)
 
@@ -588,31 +539,74 @@ GunButton.Activated:Connect(function()
 end)
 
 --==================================================
--- DESACTIVAR TODO AL MORIR
+-- TARGET DEATH
 --==================================================
 
-local function DisableOnDeath()
+local function MonitorTarget(model)
 
-	AIM_ENABLED = false
-	TARGET_LOCKED = false
-	GUN_AIM_ENABLED = false
+	local humanoid =
+		model and model:FindFirstChildOfClass("Humanoid")
+
+	if not humanoid then
+		return
+	end
+
+	humanoid.Died:Connect(function()
+
+		if Target ~= model then
+			return
+		end
+
+		-- El objetivo murió.
+		-- Solo lo quitamos.
+
+		ClearTarget()
+
+		-- Gun Aimbot sigue funcionando.
+		if GUN_AIM_ENABLED then
+
+			task.delay(0.05,function()
+
+				if GUN_AIM_ENABLED then
+					AcquireNearestTarget()
+				end
+
+			end)
+
+		elseif TARGET_LOCKED then
+
+			-- TARGET permanece activado,
+			-- pero buscamos un nuevo objetivo.
+
+			task.delay(0.05,function()
+
+				if TARGET_LOCKED then
+					AcquireNearestTarget()
+				end
+
+			end)
+
+		end
+	end)
+end
+
+--==================================================
+-- PROTEGER PERSISTENCIA DE MODOS
+--==================================================
+
+local function HandleOwnDeath()
+
+	-- IMPORTANTE:
+	-- NO apagamos AIM_ENABLED
+	-- NO apagamos GUN_AIM_ENABLED
+	-- NO apagamos TARGET_LOCKED
 
 	ClearTarget()
-
-	AimButton.Text = "AIM"
-	AimButton.BackgroundColor3 =
-		Color3.fromRGB(55,55,55)
-
-	GunButton.Text = "GUN AIMBOT"
-	GunButton.BackgroundColor3 =
-		Color3.fromRGB(55,55,55)
-
-	UpdateTargetButton()
 
 end
 
 --==================================================
--- CONFIGURAR NUESTRO PERSONAJE
+-- SETUP CHARACTER
 --==================================================
 
 local function SetupCharacter(character)
@@ -624,28 +618,49 @@ local function SetupCharacter(character)
 
 	CharacterHumanoid.Died:Connect(function()
 
-		DisableOnDeath()
+		HandleOwnDeath()
 
 	end)
+
 end
 
--- Personaje actual
+-- Character actual
 if LocalPlayer.Character then
-	SetupCharacter(LocalPlayer.Character)
+
+	SetupCharacter(
+		LocalPlayer.Character
+	)
+
 end
 
--- Respawn
+--==================================================
+-- RESPawn
+--==================================================
+
 LocalPlayer.CharacterAdded:Connect(function(character)
 
 	SetupCharacter(character)
 
-	-- El aimbot queda apagado después de respawnear.
-	DisableOnDeath()
+	-- NO apagamos ninguna función.
+	-- Solo dejamos que el personaje termine
+	-- de aparecer antes de buscar objetivo.
+
+	task.delay(0.25,function()
+
+		if AIM_ENABLED
+			or GUN_AIM_ENABLED
+			or TARGET_LOCKED then
+
+			AcquireNearestTarget()
+
+		end
+
+	end)
 
 end)
 
 --==================================================
--- AIM LOOP
+-- MAIN AIM LOOP
 --==================================================
 
 RunService:BindToRenderStep(
@@ -669,26 +684,17 @@ RunService:BindToRenderStep(
 				local humanoid, head =
 					GetTargetInfo(Target)
 
-				--------------------------------------------------
-				-- OBJETIVO MUERTO
-				--------------------------------------------------
-
 				if not humanoid or not head then
 
 					ClearTarget()
 
 					AcquireNearestTarget()
 
-				--------------------------------------------------
-				-- OBJETIVO YA NO ES VISIBLE
-				--------------------------------------------------
-
 				elseif not HasLineOfSight(
 					Target,
 					head
 				) then
 
-					-- Buscar otro objetivo visible
 					ClearTarget()
 
 					AcquireNearestTarget()
@@ -698,7 +704,17 @@ RunService:BindToRenderStep(
 		end
 
 		--------------------------------------------------
-		-- AIM NORMAL
+		-- TARGET MODE
+		--------------------------------------------------
+
+		if TARGET_LOCKED and not Target then
+
+			AcquireNearestTarget()
+
+		end
+
+		--------------------------------------------------
+		-- AIM
 		--------------------------------------------------
 
 		local shouldAim =
@@ -720,14 +736,10 @@ RunService:BindToRenderStep(
 
 			ClearTarget()
 
-			if GUN_AIM_ENABLED then
+			if TARGET_LOCKED
+				or GUN_AIM_ENABLED then
 
 				AcquireNearestTarget()
-
-			else
-
-				TARGET_LOCKED = false
-				UpdateTargetButton()
 
 			end
 
@@ -735,12 +747,13 @@ RunService:BindToRenderStep(
 		end
 
 		--------------------------------------------------
-		-- SI EL OBJETIVO QUEDA DETRÁS DE UNA PARED
+		-- VISIBILITY
 		--------------------------------------------------
 
 		if not HasLineOfSight(Target, head) then
 
-			if GUN_AIM_ENABLED then
+			if GUN_AIM_ENABLED
+				or TARGET_LOCKED then
 
 				ClearTarget()
 				AcquireNearestTarget()
@@ -758,7 +771,7 @@ RunService:BindToRenderStep(
 		end
 
 		--------------------------------------------------
-		-- APUNTAR AL HEAD
+		-- AIM HEAD
 		--------------------------------------------------
 
 		local cameraPosition =
@@ -778,3 +791,52 @@ RunService:BindToRenderStep(
 
 	end
 )
+
+--==================================================
+-- MONITOR TARGET HUMANOID CHANGES
+--==================================================
+
+task.spawn(function()
+
+	while true do
+
+		task.wait(0.25)
+
+		if Target then
+
+			local humanoid =
+				Target:FindFirstChildOfClass("Humanoid")
+
+			if humanoid
+				and humanoid ~= TargetHumanoid then
+
+				TargetHumanoid = humanoid
+				MonitorTarget(Target)
+
+			end
+		end
+	end
+end)
+
+--==================================================
+-- NUEVOS PERSONAJES
+--==================================================
+
+Players.PlayerAdded:Connect(function(player)
+
+	player.CharacterAdded:Connect(function()
+
+		task.wait(0.15)
+
+		if not Target
+			and (
+				GUN_AIM_ENABLED
+				or TARGET_LOCKED
+			) then
+
+			AcquireNearestTarget()
+
+		end
+
+	end)
+end)
