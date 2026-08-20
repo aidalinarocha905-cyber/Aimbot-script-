@@ -1,881 +1,864 @@
---========================================================
--- MOBILE AIM SYSTEM
--- Roblox Studio - propio juego
---========================================================
+-- AIM SYSTEM V4.1
+-- LocalScript -> StarterPlayer > StarterPlayerScripts
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+local UIS = game:GetService("UserInputService")
 
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local LP = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local PG = LP:WaitForChild("PlayerGui")
+
+local old = PG:FindFirstChild("AIM_SYSTEM_V4")
+if old then old:Destroy() end
 
 --========================================================
 -- CONFIG
 --========================================================
 
-local MAX_DISTANCE = 500
-local AIM_SMOOTHNESS = 0.85
+local FriendIDs = {
+	10860844901
+}
 
--- Head / Torso / Root
-local AIM_PART = "Head"
+local CFG = {
+	Aim = false,
+	Target = false,
+	Gun = false,
 
---========================================================
--- STATE
---========================================================
+	EnemyOnly = false,
+	Friends = false,
+	ESP = false,
 
-local AIM_ENABLED = false
-local TARGET_MODE = false
-local GUN_AIM_ENABLED = false
+	AimPart = "Head",
 
-local CurrentTarget = nil
-local Character = nil
-local Humanoid = nil
+	MaxDistance = 1000,
+	FOV = 360,
+
+	Players = true,
+	NPCs = true,
+
+	WallCheck = true
+}
 
 --========================================================
 -- GUI
 --========================================================
 
-local OldGui = PlayerGui:FindFirstChild("MobileAimGui")
-
-if OldGui then
-	OldGui:Destroy()
-end
-
 local Gui = Instance.new("ScreenGui")
-Gui.Name = "MobileAimGui"
+Gui.Name = "AIM_SYSTEM_V4"
 Gui.ResetOnSpawn = false
 Gui.IgnoreGuiInset = true
-Gui.Parent = PlayerGui
+Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+Gui.Parent = PG
 
---========================================================
--- FLOATING BUTTON
---========================================================
+local Float = Instance.new("TextButton")
+Float.Size = UDim2.fromOffset(58,58)
+Float.Position = UDim2.new(0,20,.5,-29)
+Float.Text = "🎯"
+Float.TextScaled = true
+Float.TextColor3 = Color3.new(1,1,1)
+Float.BackgroundColor3 = Color3.fromRGB(30,30,30)
+Float.BorderSizePixel = 0
+Float.Parent = Gui
 
-local OpenButton = Instance.new("TextButton")
-OpenButton.Size = UDim2.fromOffset(52,52)
-OpenButton.Position = UDim2.new(0,20,0.5,-26)
-OpenButton.Text = "🎯"
-OpenButton.TextScaled = true
-OpenButton.TextColor3 = Color3.new(1,1,1)
-OpenButton.BackgroundColor3 = Color3.fromRGB(30,30,30)
-OpenButton.BorderSizePixel = 0
-OpenButton.Parent = Gui
+Instance.new("UICorner",Float).CornerRadius = UDim.new(1,0)
 
-local OpenCorner = Instance.new("UICorner")
-OpenCorner.CornerRadius = UDim.new(1,0)
-OpenCorner.Parent = OpenButton
+local Window = Instance.new("Frame")
+Window.Size = UDim2.fromOffset(300,450)
+Window.Position = UDim2.new(.5,-150,.5,-225)
+Window.BackgroundColor3 = Color3.fromRGB(24,24,24)
+Window.BorderSizePixel = 0
+Window.Active = true
+Window.Parent = Gui
 
---========================================================
--- MAIN FRAME
---========================================================
+Instance.new("UICorner",Window).CornerRadius = UDim.new(0,14)
 
-local Frame = Instance.new("Frame")
-Frame.Size = UDim2.fromOffset(240,300)
-Frame.Position = UDim2.new(0.5,-120,0.5,-150)
-Frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
-Frame.BorderSizePixel = 0
-Frame.Parent = Gui
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1,0,0,50)
+Header.BackgroundColor3 = Color3.fromRGB(40,40,40)
+Header.BorderSizePixel = 0
+Header.Active = true
+Header.Parent = Window
 
-local FrameCorner = Instance.new("UICorner")
-FrameCorner.CornerRadius = UDim.new(0,14)
-FrameCorner.Parent = Frame
+Instance.new("UICorner",Header).CornerRadius = UDim.new(0,14)
 
---========================================================
--- TITLE
---========================================================
-
-local Title = Instance.new("TextButton")
-Title.Size = UDim2.new(1,0,0,42)
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1,-55,1,0)
+Title.Position = UDim2.fromOffset(8,0)
 Title.BackgroundTransparency = 1
-Title.Text = "🎯 AIM SYSTEM"
-Title.TextColor3 = Color3.new(1,1,1)
+Title.Text = "🎯 AIM SYSTEM V4.1"
 Title.TextScaled = true
-Title.Parent = Frame
+Title.TextColor3 = Color3.new(1,1,1)
+Title.Parent = Header
+
+local Close = Instance.new("TextButton")
+Close.Size = UDim2.fromOffset(40,40)
+Close.Position = UDim2.new(1,-45,0,5)
+Close.Text = "✕"
+Close.TextScaled = true
+Close.TextColor3 = Color3.new(1,1,1)
+Close.BackgroundColor3 = Color3.fromRGB(145,45,45)
+Close.BorderSizePixel = 0
+Close.Parent = Header
+
+Instance.new("UICorner",Close).CornerRadius = UDim.new(0,9)
+
+local Scroll = Instance.new("ScrollingFrame")
+Scroll.Size = UDim2.new(1,-10,1,-58)
+Scroll.Position = UDim2.fromOffset(5,53)
+Scroll.BackgroundTransparency = 1
+Scroll.BorderSizePixel = 0
+Scroll.ScrollBarThickness = 5
+Scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+Scroll.Active = true
+Scroll.Parent = Window
+
+local Layout = Instance.new("UIListLayout")
+Layout.Padding = UDim.new(0,8)
+Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+Layout.Parent = Scroll
+
+local Padding = Instance.new("UIPadding")
+Padding.PaddingTop = UDim.new(0,5)
+Padding.PaddingBottom = UDim.new(0,12)
+Padding.Parent = Scroll
+
+local function Button(text)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(1,-10,0,44)
+	b.Text = text
+	b.TextScaled = true
+	b.TextColor3 = Color3.new(1,1,1)
+	b.BackgroundColor3 = Color3.fromRGB(55,55,55)
+	b.BorderSizePixel = 0
+	b.AutoButtonColor = true
+	b.Parent = Scroll
+
+	Instance.new("UICorner",b).CornerRadius = UDim.new(0,9)
+
+	return b
+end
+
+local Aim = Button("🎯 AIM: OFF")
+local Target = Button("👤 TARGET: OFF")
+local Gun = Button("🔫 GUN AIMBOT: OFF")
+local Part = Button("🧠 PART: HEAD")
+local Enemy = Button("🔴 ENEMIES ONLY: OFF")
+local Friends = Button("🤝 FRIEND MODE: OFF")
+local ESP = Button("👁️ ESP: OFF")
+local PlayersBtn = Button("👥 PLAYERS: ON")
+local NPCBtn = Button("🤖 NPCs: ON")
+local Wall = Button("🧱 WALL CHECK: ON")
+
+local function Resize()
+	Scroll.CanvasSize = UDim2.fromOffset(
+		0,
+		Layout.AbsoluteContentSize.Y + 25
+	)
+end
+
+Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(Resize)
+Resize()
 
 --========================================================
--- AIM BUTTON
+-- GUI STATES
 --========================================================
 
-local AimButton = Instance.new("TextButton")
-AimButton.Size = UDim2.fromOffset(105,48)
-AimButton.Position = UDim2.fromOffset(10,55)
-AimButton.Text = "AIM: OFF"
-AimButton.TextScaled = true
-AimButton.TextColor3 = Color3.new(1,1,1)
-AimButton.BackgroundColor3 = Color3.fromRGB(55,55,55)
-AimButton.BorderSizePixel = 0
-AimButton.Parent = Frame
+local function SetButton(b,on,off,onText)
+	b.Text = on and onText or off
+	b.BackgroundColor3 = on
+		and Color3.fromRGB(45,130,70)
+		or Color3.fromRGB(55,55,55)
+end
 
-local AimCorner = Instance.new("UICorner")
-AimCorner.CornerRadius = UDim.new(0,10)
-AimCorner.Parent = AimButton
+Aim.Activated:Connect(function()
+	CFG.Aim = not CFG.Aim
+	SetButton(Aim,CFG.Aim,"🎯 AIM: OFF","🎯 AIM: ON")
+end)
+
+Target.Activated:Connect(function()
+	CFG.Target = not CFG.Target
+	SetButton(Target,CFG.Target,"👤 TARGET: OFF","👤 TARGET: ON")
+end)
+
+Gun.Activated:Connect(function()
+	CFG.Gun = not CFG.Gun
+	SetButton(Gun,CFG.Gun,"🔫 GUN AIMBOT: OFF","🔫 GUN AIMBOT: ON")
+end)
+
+Enemy.Activated:Connect(function()
+	CFG.EnemyOnly = not CFG.EnemyOnly
+	SetButton(
+		Enemy,
+		CFG.EnemyOnly,
+		"🔴 ENEMIES ONLY: OFF",
+		"🔴 ENEMIES ONLY: ON"
+	)
+end)
+
+Friends.Activated:Connect(function()
+	CFG.Friends = not CFG.Friends
+
+	SetButton(
+		Friends,
+		CFG.Friends,
+		"🤝 FRIEND MODE: OFF",
+		"🤝 FRIEND MODE: ON"
+	)
+end)
+
+ESP.Activated:Connect(function()
+	CFG.ESP = not CFG.ESP
+
+	SetButton(
+		ESP,
+		CFG.ESP,
+		"👁️ ESP: OFF",
+		"👁️ ESP: ON"
+	)
+end)
+
+PlayersBtn.Activated:Connect(function()
+	CFG.Players = not CFG.Players
+
+	SetButton(
+		PlayersBtn,
+		CFG.Players,
+		"👥 PLAYERS: OFF",
+		"👥 PLAYERS: ON"
+	)
+end)
+
+NPCBtn.Activated:Connect(function()
+	CFG.NPCs = not CFG.NPCs
+
+	SetButton(
+		NPCBtn,
+		CFG.NPCs,
+		"🤖 NPCs: OFF",
+		"🤖 NPCs: ON"
+	)
+end)
+
+Wall.Activated:Connect(function()
+	CFG.WallCheck = not CFG.WallCheck
+
+	SetButton(
+		Wall,
+		CFG.WallCheck,
+		"🧱 WALL CHECK: OFF",
+		"🧱 WALL CHECK: ON"
+	)
+end)
+
+Part.Activated:Connect(function()
+
+	if CFG.AimPart == "Head" then
+		CFG.AimPart = "Torso"
+
+	elseif CFG.AimPart == "Torso" then
+		CFG.AimPart = "HumanoidRootPart"
+
+	else
+		CFG.AimPart = "Head"
+	end
+
+	local names = {
+		Head = "HEAD",
+		Torso = "TORSO",
+		HumanoidRootPart = "ROOT"
+	}
+
+	Part.Text = "🧠 PART: "..names[CFG.AimPart]
+end)
+
+Close.Activated:Connect(function()
+	Window.Visible = false
+end)
+
+Float.Activated:Connect(function()
+	Window.Visible = not Window.Visible
+end)
 
 --========================================================
--- TARGET BUTTON
+-- DRAG
 --========================================================
 
-local TargetButton = Instance.new("TextButton")
-TargetButton.Size = UDim2.fromOffset(105,48)
-TargetButton.Position = UDim2.fromOffset(125,55)
-TargetButton.Text = "TARGET"
-TargetButton.TextScaled = true
-TargetButton.TextColor3 = Color3.new(1,1,1)
-TargetButton.BackgroundColor3 = Color3.fromRGB(55,55,55)
-TargetButton.BorderSizePixel = 0
-TargetButton.Parent = Frame
+local function Drag(obj,moved)
 
-local TargetCorner = Instance.new("UICorner")
-TargetCorner.CornerRadius = UDim.new(0,10)
-TargetCorner.Parent = TargetButton
+	local active = false
+	local start
+	local original
+	local inputObject
 
---========================================================
--- GUN AIM
---========================================================
+	obj.InputBegan:Connect(function(input)
 
-local GunButton = Instance.new("TextButton")
-GunButton.Size = UDim2.fromOffset(220,48)
-GunButton.Position = UDim2.fromOffset(10,112)
-GunButton.Text = "GUN AIMBOT: OFF"
-GunButton.TextScaled = true
-GunButton.TextColor3 = Color3.new(1,1,1)
-GunButton.BackgroundColor3 = Color3.fromRGB(55,55,55)
-GunButton.BorderSizePixel = 0
-GunButton.Parent = Frame
+		if input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseButton1 then
 
-local GunCorner = Instance.new("UICorner")
-GunCorner.CornerRadius = UDim.new(0,10)
-GunCorner.Parent = GunButton
+			active = true
+			inputObject = input
+			start = input.Position
+			original = moved.Position
+		end
+	end)
 
---========================================================
--- AIM PART LABEL
---========================================================
+	obj.InputEnded:Connect(function(input)
 
-local PartLabel = Instance.new("TextLabel")
-PartLabel.Size = UDim2.fromOffset(220,30)
-PartLabel.Position = UDim2.fromOffset(10,168)
-PartLabel.BackgroundTransparency = 1
-PartLabel.Text = "AIM PART: HEAD"
-PartLabel.TextColor3 = Color3.new(1,1,1)
-PartLabel.TextScaled = true
-PartLabel.Parent = Frame
+		if input == inputObject then
+			active = false
+			inputObject = nil
+		end
+	end)
 
---========================================================
--- PART BUTTONS
---========================================================
+	UIS.InputChanged:Connect(function(input)
 
-local HeadButton = Instance.new("TextButton")
-HeadButton.Size = UDim2.fromOffset(68,42)
-HeadButton.Position = UDim2.fromOffset(10,205)
-HeadButton.Text = "HEAD"
-HeadButton.TextScaled = true
-HeadButton.TextColor3 = Color3.new(1,1,1)
-HeadButton.BackgroundColor3 = Color3.fromRGB(70,130,70)
-HeadButton.BorderSizePixel = 0
-HeadButton.Parent = Frame
+		if not active then
+			return
+		end
 
-local TorsoButton = Instance.new("TextButton")
-TorsoButton.Size = UDim2.fromOffset(68,42)
-TorsoButton.Position = UDim2.fromOffset(86,205)
-TorsoButton.Text = "TORSO"
-TorsoButton.TextScaled = true
-TorsoButton.TextColor3 = Color3.new(1,1,1)
-TorsoButton.BackgroundColor3 = Color3.fromRGB(55,55,55)
-TorsoButton.BorderSizePixel = 0
-TorsoButton.Parent = Frame
+		if input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseMovement then
 
-local RootButton = Instance.new("TextButton")
-RootButton.Size = UDim2.fromOffset(68,42)
-RootButton.Position = UDim2.fromOffset(162,205)
-RootButton.Text = "ROOT"
-RootButton.TextScaled = true
-RootButton.TextColor3 = Color3.new(1,1,1)
-RootButton.BackgroundColor3 = Color3.fromRGB(55,55,55)
-RootButton.BorderSizePixel = 0
-RootButton.Parent = Frame
+			local d = input.Position - start
+
+			moved.Position = UDim2.new(
+				original.X.Scale,
+				original.X.Offset + d.X,
+				original.Y.Scale,
+				original.Y.Offset + d.Y
+			)
+		end
+	end)
+end
+
+Drag(Float,Float)
+Drag(Header,Window)
 
 --========================================================
--- CLOSE
+-- CHARACTER
 --========================================================
 
-local CloseButton = Instance.new("TextButton")
-CloseButton.Size = UDim2.fromOffset(220,35)
-CloseButton.Position = UDim2.fromOffset(10,255)
-CloseButton.Text = "✕ CERRAR"
-CloseButton.TextScaled = true
-CloseButton.TextColor3 = Color3.new(1,1,1)
-CloseButton.BackgroundColor3 = Color3.fromRGB(80,45,45)
-CloseButton.BorderSizePixel = 0
-CloseButton.Parent = Frame
+local Character
+local Humanoid
+local Root
+
+local function SetupCharacter(char)
+
+	Character = char
+	Humanoid = char:WaitForChild("Humanoid",5)
+	Root = char:WaitForChild("HumanoidRootPart",5)
+end
+
+if LP.Character then
+	SetupCharacter(LP.Character)
+end
+
+LP.CharacterAdded:Connect(SetupCharacter)
 
 --========================================================
--- GET AIM PART
+-- FRIEND ID CHECK
 --========================================================
 
-local function GetAimPart(model)
+local function IsInFriendList(player)
+
+	if not player then
+		return false
+	end
+
+	return table.find(FriendIDs,player.UserId) ~= nil
+end
+
+local function IsFriend(player)
+
+	if not player then
+		return false
+	end
+
+	if player == LP then
+		return true
+	end
+
+	-- Lista personalizada
+	if IsInFriendList(player) then
+		return true
+	end
+
+	-- Amigos reales de Roblox
+	local ok,result = pcall(function()
+		return LP:IsFriendsWith(player.UserId)
+	end)
+
+	return ok and result
+end
+
+--========================================================
+-- TARGET HELPERS
+--========================================================
+
+local function GetHumanoid(model)
+	return model and model:FindFirstChildOfClass("Humanoid")
+end
+
+local function GetPart(model)
 
 	if not model then
 		return nil
 	end
 
-	if AIM_PART == "Head" then
-		return model:FindFirstChild("Head")
-	end
+	if CFG.AimPart == "Head" then
 
-	if AIM_PART == "Torso" then
+		return model:FindFirstChild("Head")
+
+	elseif CFG.AimPart == "Torso" then
+
 		return model:FindFirstChild("UpperTorso")
 			or model:FindFirstChild("Torso")
-	end
 
-	if AIM_PART == "Root" then
+	else
+
 		return model:FindFirstChild("HumanoidRootPart")
 	end
-
-	return model:FindFirstChild("Head")
 end
 
---========================================================
--- VALID TARGET
---========================================================
+local function Alive(model)
 
-local function GetTargetData(model)
+	local h = GetHumanoid(model)
 
-	if not model or not model:IsA("Model") then
-		return nil
-	end
-
-	if model == Character then
-		return nil
-	end
-
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	local part = GetAimPart(model)
-
-	if not humanoid or not part then
-		return nil
-	end
-
-	if humanoid.Health <= 0 then
-		return nil
-	end
-
-	return humanoid, part
+	return h and h.Health > 0
 end
 
---========================================================
--- LINE OF SIGHT
---========================================================
+local function SameTeam(player)
 
-local function CanSeeTarget(model, part)
-
-	local camera = workspace.CurrentCamera
-
-	if not camera or not part then
+	if not player then
 		return false
 	end
 
-	local origin = camera.CFrame.Position
+	if LP.Team ~= nil and player.Team ~= nil then
+		return LP.Team == player.Team
+	end
+
+	return false
+end
+
+--========================================================
+-- WALL CHECK
+--========================================================
+
+local function Visible(part)
+
+	if not CFG.WallCheck then
+		return true
+	end
+
+	if not Character or not Root then
+		return false
+	end
+
+	local origin = Camera.CFrame.Position
 	local direction = part.Position - origin
 
 	local params = RaycastParams.new()
+
 	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.IgnoreWater = true
+	params.FilterDescendantsInstances = {
+		Character
+	}
 
-	local filter = {}
-
-	if Character then
-		table.insert(filter, Character)
-	end
-
-	params.FilterDescendantsInstances = filter
-
-	local result = workspace:Raycast(
+	local hit = workspace:Raycast(
 		origin,
 		direction,
 		params
 	)
 
-	if not result then
+	if not hit then
 		return true
 	end
 
-	return result.Instance:IsDescendantOf(model)
+	return hit.Instance:IsDescendantOf(part.Parent)
 end
 
 --========================================================
--- IS PLAYER CHARACTER
+-- VALID PLAYER
 --========================================================
 
-local function IsPlayerCharacter(model)
+local function ValidPlayer(player)
 
-	return Players:GetPlayerFromCharacter(model) ~= nil
-
-end
-
---========================================================
--- GET CANDIDATES
---========================================================
-
-local function GetCandidates()
-
-	local candidates = {}
-
-	-- PLAYERS
-	for _, player in ipairs(Players:GetPlayers()) do
-
-		if player ~= LocalPlayer then
-
-			local character = player.Character
-
-			if character then
-				local humanoid, part =
-					GetTargetData(character)
-
-				if humanoid and part then
-					table.insert(candidates, character)
-				end
-			end
-		end
+	if player == LP then
+		return false
 	end
 
-	-- NPCS
-	for _, object in ipairs(workspace:GetDescendants()) do
-
-		if object:IsA("Model")
-			and not IsPlayerCharacter(object) then
-
-			local humanoid, part =
-				GetTargetData(object)
-
-			if humanoid and part then
-				table.insert(candidates, object)
-			end
-		end
+	if not CFG.Players then
+		return false
 	end
 
-	return candidates
+	local char = player.Character
+
+	if not char or not Alive(char) then
+		return false
+	end
+
+	-- ID personalizado + amigos Roblox
+	if CFG.Friends and IsFriend(player) then
+		return false
+	end
+
+	if CFG.EnemyOnly and SameTeam(player) then
+		return false
+	end
+
+	local part = GetPart(char)
+
+	if not part then
+		return false
+	end
+
+	return true,part,char
 end
 
 --========================================================
--- FIND BEST TARGET
+-- NPC
 --========================================================
 
-local function FindBestTarget()
+local function IsNPC(model)
 
-	local camera = workspace.CurrentCamera
+	if not model:IsA("Model") then
+		return false
+	end
 
-	if not camera then
+	if model == Character then
+		return false
+	end
+
+	local h = GetHumanoid(model)
+
+	if not h or h.Health <= 0 then
+		return false
+	end
+
+	if Players:GetPlayerFromCharacter(model) then
+		return false
+	end
+
+	return true
+end
+
+--========================================================
+-- FIND TARGET
+--========================================================
+
+local function FindTarget()
+
+	if not Camera then
 		return nil
 	end
 
-	local cameraPosition = camera.CFrame.Position
-	local lookVector = camera.CFrame.LookVector
+	local best
+	local bestDistance = math.huge
 
-	local bestTarget = nil
-	local bestScore = math.huge
+	-- PLAYERS
+	if CFG.Players then
 
-	for _, model in ipairs(GetCandidates()) do
+		for _,player in ipairs(Players:GetPlayers()) do
 
-		local humanoid, part =
-			GetTargetData(model)
+			local valid,part,char = ValidPlayer(player)
 
-		if humanoid and part then
+			if valid then
 
-			local offset =
-				part.Position - cameraPosition
+				local distance =
+					(part.Position - Camera.CFrame.Position).Magnitude
 
-			local distance =
-				offset.Magnitude
+				if distance <= CFG.MaxDistance
+				and distance < bestDistance
+				and Visible(part) then
 
-			if distance <= MAX_DISTANCE then
+					local _,onScreen =
+						Camera:WorldToViewportPoint(part.Position)
 
-				-- Nunca selecciona objetivos
-				-- que no puedas ver.
+					if onScreen then
 
-				if CanSeeTarget(model, part) then
+						best = {
+							Model = char,
+							Player = player,
+							Part = part
+						}
 
-					local direction = offset.Unit
-
-					local alignment =
-						lookVector:Dot(direction)
-
-					-- Prioriza cercanía y objetivos
-					-- hacia donde estás mirando.
-
-					local score =
-						distance
-						- (alignment * 100)
-
-					if score < bestScore then
-
-						bestScore = score
-						bestTarget = model
-
+						bestDistance = distance
 					end
 				end
 			end
 		end
 	end
 
-	return bestTarget
-end
+	-- NPCs
+	if CFG.NPCs then
 
---========================================================
--- CLEAR TARGET
---========================================================
+		for _,model in ipairs(workspace:GetDescendants()) do
 
-local function ClearTarget()
+			if IsNPC(model) then
 
-	CurrentTarget = nil
+				local part = GetPart(model)
 
-end
+				if part then
 
---========================================================
--- ACQUIRE
---========================================================
+					local distance =
+						(part.Position - Camera.CFrame.Position).Magnitude
 
-local function AcquireTarget()
+					if distance <= CFG.MaxDistance
+					and distance < bestDistance
+					and Visible(part) then
 
-	local target = FindBestTarget()
+						local _,onScreen =
+							Camera:WorldToViewportPoint(part.Position)
 
-	if target then
-		CurrentTarget = target
-		return true
-	end
+						if onScreen then
 
-	ClearTarget()
-	return false
-end
+							best = {
+								Model = model,
+								Player = nil,
+								Part = part
+							}
 
---========================================================
--- AIM PART BUTTONS
---========================================================
-
-local function UpdatePartButtons()
-
-	HeadButton.BackgroundColor3 =
-		Color3.fromRGB(55,55,55)
-
-	TorsoButton.BackgroundColor3 =
-		Color3.fromRGB(55,55,55)
-
-	RootButton.BackgroundColor3 =
-		Color3.fromRGB(55,55,55)
-
-	if AIM_PART == "Head" then
-
-		HeadButton.BackgroundColor3 =
-			Color3.fromRGB(70,130,70)
-
-	elseif AIM_PART == "Torso" then
-
-		TorsoButton.BackgroundColor3 =
-			Color3.fromRGB(70,130,70)
-
-	elseif AIM_PART == "Root" then
-
-		RootButton.BackgroundColor3 =
-			Color3.fromRGB(70,130,70)
-
-	end
-
-	PartLabel.Text =
-		"AIM PART: " .. string.upper(AIM_PART)
-end
-
-HeadButton.Activated:Connect(function()
-
-	AIM_PART = "Head"
-
-	UpdatePartButtons()
-
-	-- El mismo objetivo puede seguir seleccionado;
-	-- simplemente cambia el punto de apuntado.
-
-end)
-
-TorsoButton.Activated:Connect(function()
-
-	AIM_PART = "Torso"
-
-	UpdatePartButtons()
-
-end)
-
-RootButton.Activated:Connect(function()
-
-	AIM_PART = "Root"
-
-	UpdatePartButtons()
-
-end)
-
---========================================================
--- AIM TOGGLE
---========================================================
-
-AimButton.Activated:Connect(function()
-
-	AIM_ENABLED = not AIM_ENABLED
-
-	if AIM_ENABLED then
-
-		AimButton.Text = "AIM: ON"
-
-		AimButton.BackgroundColor3 =
-			Color3.fromRGB(50,150,70)
-
-	else
-
-		AimButton.Text = "AIM: OFF"
-
-		AimButton.BackgroundColor3 =
-			Color3.fromRGB(55,55,55)
-
-	end
-end)
-
---========================================================
--- TARGET MODE
---========================================================
-
-TargetButton.Activated:Connect(function()
-
-	TARGET_MODE = not TARGET_MODE
-
-	if TARGET_MODE then
-
-		AcquireTarget()
-
-		TargetButton.Text = "TARGET: ON"
-
-		TargetButton.BackgroundColor3 =
-			Color3.fromRGB(50,120,70)
-
-	else
-
-		ClearTarget()
-
-		TargetButton.Text = "TARGET"
-
-		TargetButton.BackgroundColor3 =
-			Color3.fromRGB(55,55,55)
-
-	end
-end)
-
---========================================================
--- GUN AIMBOT
---========================================================
-
-GunButton.Activated:Connect(function()
-
-	GUN_AIM_ENABLED =
-		not GUN_AIM_ENABLED
-
-	if GUN_AIM_ENABLED then
-
-		GunButton.Text =
-			"GUN AIMBOT: ON"
-
-		GunButton.BackgroundColor3 =
-			Color3.fromRGB(150,55,55)
-
-		if not CurrentTarget then
-			AcquireTarget()
-		end
-
-	else
-
-		GunButton.Text =
-			"GUN AIMBOT: OFF"
-
-		GunButton.BackgroundColor3 =
-			Color3.fromRGB(55,55,55)
-
-	end
-end)
-
---========================================================
--- OPEN / CLOSE
---========================================================
-
-CloseButton.Activated:Connect(function()
-
-	Frame.Visible = false
-
-end)
-
-OpenButton.Activated:Connect(function()
-
-	Frame.Visible = not Frame.Visible
-
-end)
-
---========================================================
--- DRAG FLOATING BUTTON
---========================================================
-
-local dragging = false
-local dragStart
-local startPosition
-
-OpenButton.InputBegan:Connect(function(input)
-
-	if input.UserInputType == Enum.UserInputType.Touch
-		or input.UserInputType == Enum.UserInputType.MouseButton1 then
-
-		dragging = true
-		dragStart = input.Position
-		startPosition = OpenButton.Position
-
-	end
-end)
-
-OpenButton.InputEnded:Connect(function(input)
-
-	if input.UserInputType == Enum.UserInputType.Touch
-		or input.UserInputType == Enum.UserInputType.MouseButton1 then
-
-		dragging = false
-
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-
-	if not dragging then
-		return
-	end
-
-	if input.UserInputType == Enum.UserInputType.Touch
-		or input.UserInputType == Enum.UserInputType.MouseMovement then
-
-		local delta =
-			input.Position - dragStart
-
-		OpenButton.Position =
-			UDim2.new(
-				startPosition.X.Scale,
-				startPosition.X.Offset + delta.X,
-
-				startPosition.Y.Scale,
-				startPosition.Y.Offset + delta.Y
-			)
-
-	end
-end)
-
---========================================================
--- TARGET DEATH MONITOR
---========================================================
-
-local function WatchTarget(model)
-
-	local humanoid =
-		model and model:FindFirstChildOfClass("Humanoid")
-
-	if not humanoid then
-		return
-	end
-
-	humanoid.Died:Connect(function()
-
-		if CurrentTarget ~= model then
-			return
-		end
-
-		ClearTarget()
-
-		-- No apagamos las funciones.
-		-- Solo buscamos otro objetivo.
-
-		if TARGET_MODE or GUN_AIM_ENABLED then
-
-			task.delay(0.1, function()
-
-				if TARGET_MODE or GUN_AIM_ENABLED then
-					AcquireTarget()
-				end
-
-			end)
-		end
-	end)
-end
-
---========================================================
--- OWN CHARACTER
---========================================================
-
-local function SetupCharacter(character)
-
-	Character = character
-
-	Humanoid =
-		character:WaitForChild("Humanoid")
-
-	Humanoid.Died:Connect(function()
-
-		-- IMPORTANTE:
-		-- NO desactiva AIM
-		-- NO desactiva TARGET
-		-- NO desactiva GUN AIMBOT
-
-		ClearTarget()
-
-	end)
-end
-
-if LocalPlayer.Character then
-	SetupCharacter(LocalPlayer.Character)
-end
-
---========================================================
--- RESPAWN
---========================================================
-
-LocalPlayer.CharacterAdded:Connect(function(character)
-
-	SetupCharacter(character)
-
-	task.delay(0.35, function()
-
-		if AIM_ENABLED
-			or TARGET_MODE
-			or GUN_AIM_ENABLED then
-
-			AcquireTarget()
-
-		end
-	end)
-end)
-
---========================================================
--- MAIN LOOP
---========================================================
-
-RunService:BindToRenderStep(
-	"MobileAimSystem",
-	Enum.RenderPriority.Camera.Value + 1,
-	function()
-
-		--============================================
-		-- GUN AIMBOT / AUTO REACQUIRE
-		--============================================
-
-		if GUN_AIM_ENABLED then
-
-			if not CurrentTarget then
-
-				AcquireTarget()
-
-			else
-
-				local humanoid, part =
-					GetTargetData(CurrentTarget)
-
-				if not humanoid or not part then
-
-					ClearTarget()
-					AcquireTarget()
-
-				elseif not CanSeeTarget(
-					CurrentTarget,
-					part
-				) then
-
-					ClearTarget()
-					AcquireTarget()
-
+							bestDistance = distance
+						end
+					end
 				end
 			end
 		end
-
-		--============================================
-		-- TARGET MODE
-		--============================================
-
-		if TARGET_MODE and not CurrentTarget then
-			AcquireTarget()
-		end
-
-		--============================================
-		-- AIM
-		--============================================
-
-		if not AIM_ENABLED then
-			return
-		end
-
-		if not CurrentTarget then
-			return
-		end
-
-		local humanoid, part =
-			GetTargetData(CurrentTarget)
-
-		if not humanoid or not part then
-
-			ClearTarget()
-
-			if TARGET_MODE or GUN_AIM_ENABLED then
-				AcquireTarget()
-			end
-
-			return
-		end
-
-		--============================================
-		-- WALL CHECK
-		--============================================
-
-		if not CanSeeTarget(
-			CurrentTarget,
-			part
-		) then
-
-			ClearTarget()
-
-			if TARGET_MODE or GUN_AIM_ENABLED then
-				AcquireTarget()
-			end
-
-			return
-		end
-
-		--============================================
-		-- CAMERA AIM
-		--============================================
-
-		local camera =
-			workspace.CurrentCamera
-
-		if not camera then
-			return
-		end
-
-		local cameraPosition =
-			camera.CFrame.Position
-
-		local desired =
-			CFrame.lookAt(
-				cameraPosition,
-				part.Position
-			)
-
-		camera.CFrame =
-			camera.CFrame:Lerp(
-				desired,
-				AIM_SMOOTHNESS
-			)
-
 	end
-)
+
+	return best
+end
 
 --========================================================
--- INITIALIZE
+-- CURRENT TARGET
 --========================================================
 
-UpdatePartButtons()
+local CurrentTarget
 
-print("Mobile Aim System loaded successfully.")
+local function TargetStillValid(t)
+
+	if not t then
+		return false
+	end
+
+	if not t.Model
+	or not t.Model.Parent
+	or not Alive(t.Model) then
+
+		return false
+	end
+
+	-- Si es jugador, volver a comprobar amigos/equipo
+	if t.Player then
+
+		if CFG.Friends and IsFriend(t.Player) then
+			return false
+		end
+
+		if CFG.EnemyOnly and SameTeam(t.Player) then
+			return false
+		end
+	end
+
+	local part = GetPart(t.Model)
+
+	if not part then
+		return false
+	end
+
+	if CFG.WallCheck and not Visible(part) then
+		return false
+	end
+
+	t.Part = part
+
+	return true
+end
+
+--========================================================
+-- ESP
+--========================================================
+
+local ESPObjects = {}
+
+local function RemoveESP(model)
+
+	local h = ESPObjects[model]
+
+	if h then
+		h:Destroy()
+		ESPObjects[model] = nil
+	end
+end
+
+local function MakeESP(model,player)
+
+	if ESPObjects[model] then
+		return
+	end
+
+	local h = Instance.new("Highlight")
+
+	h.Name = "AimESP"
+	h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	h.FillTransparency = .65
+	h.OutlineTransparency = 0
+
+	if player then
+
+		if SameTeam(player) then
+
+			h.FillColor =
+				Color3.fromRGB(50,100,255)
+
+			h.OutlineColor =
+				Color3.fromRGB(100,160,255)
+
+		else
+
+			h.FillColor =
+				Color3.fromRGB(255,50,50)
+
+			h.OutlineColor =
+				Color3.fromRGB(255,120,120)
+		end
+
+	else
+
+		h.FillColor =
+			Color3.fromRGB(255,170,40)
+
+		h.OutlineColor =
+			Color3.fromRGB(255,220,100)
+	end
+
+	h.Adornee = model
+	h.Parent = model
+
+	ESPObjects[model] = h
+end
+
+local function UpdateESP()
+
+	if not CFG.ESP then
+
+		for model in pairs(ESPObjects) do
+			RemoveESP(model)
+		end
+
+		return
+	end
+
+	local seen = {}
+
+	if CFG.Players then
+
+		for _,p in ipairs(Players:GetPlayers()) do
+
+			if p ~= LP
+			and p.Character
+			and Alive(p.Character) then
+
+				seen[p.Character] = true
+
+				if not (CFG.Friends and IsFriend(p)) then
+					MakeESP(p.Character,p)
+				else
+					RemoveESP(p.Character)
+				end
+			end
+		end
+	end
+
+	if CFG.NPCs then
+
+		for _,m in ipairs(workspace:GetDescendants()) do
+
+			if IsNPC(m) then
+
+				seen[m] = true
+				MakeESP(m,nil)
+			end
+		end
+	end
+
+	for model in pairs(ESPObjects) do
+
+		if not seen[model] then
+			RemoveESP(model)
+		end
+	end
+end
+
+--========================================================
+-- AIM LOOP
+--========================================================
+
+local ESPTimer = 0
+
+RunService.RenderStepped:Connect(function(dt)
+
+	if not Character
+	or not Humanoid
+	or Humanoid.Health <= 0 then
+
+		CurrentTarget = nil
+		return
+	end
+
+	-- Buscar/reemplazar objetivo
+	if CFG.Target or CFG.Aim or CFG.Gun then
+
+		if not TargetStillValid(CurrentTarget) then
+			CurrentTarget = FindTarget()
+		end
+
+	else
+
+		CurrentTarget = nil
+	end
+
+	-- AIM / GUN AIMBOT
+	if CFG.Aim or CFG.Gun then
+
+		if CurrentTarget
+		and TargetStillValid(CurrentTarget) then
+
+			Camera.CFrame =
+				CFrame.lookAt(
+					Camera.CFrame.Position,
+					CurrentTarget.Part.Position
+				)
+		end
+	end
+
+	-- ESP
+	ESPTimer += dt
+
+	if ESPTimer >= .25 then
+
+		ESPTimer = 0
+		UpdateESP()
+	end
+end)
+
+--========================================================
+-- TARGET REACQUIRE
+--========================================================
+
+Players.PlayerRemoving:Connect(function(player)
+
+	if CurrentTarget
+	and CurrentTarget.Player == player then
+
+		CurrentTarget = nil
+	end
+end)
+
+print("================================")
+print("AIM SYSTEM V4.1")
+print("AUTO SHOOT: REMOVED")
+print("CUSTOM FRIEND ID: 10860844901")
+print("FRIEND FILTER: READY")
+print("================================")
